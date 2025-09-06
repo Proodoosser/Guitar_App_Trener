@@ -75,36 +75,72 @@ app.post("/api/progress", (req, res) => {
   res.json({ success: true, profile: profiles[id] });
 });
 
-app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
-});
-// Добавьте этот маршрут после существующих маршрутов
+// 🟡 Новый endpoint для уведомлений (ДОБАВЛЕНО ПРАВИЛЬНО)
 app.post('/api/notifications', async (req, res) => {
   try {
     const { telegramId, message, activityType, userData, metadata } = req.body;
     
-    console.log('Received notification from Telegram user:', {
+    console.log('📨 Received notification from Telegram user:', {
       telegramId,
       username: userData?.username,
+      firstName: userData?.firstName,
       activityType,
-      message
+      message: message.substring(0, 100) + (message.length > 100 ? '...' : ''),
+      timestamp: new Date().toISOString()
     });
     
-    // Здесь можно добавить логику для отправки в реального Telegram бота
-    // или сохранения в базу данных
+    // Можно сохранить уведомление в профиль пользователя
+    if (telegramId && profiles[telegramId]) {
+      if (!profiles[telegramId].notifications) {
+        profiles[telegramId].notifications = [];
+      }
+      profiles[telegramId].notifications.push({
+        message,
+        activityType,
+        timestamp: new Date().toISOString(),
+        metadata
+      });
+      
+      // Ограничиваем историю уведомлений (последние 50)
+      if (profiles[telegramId].notifications.length > 50) {
+        profiles[telegramId].notifications = profiles[telegramId].notifications.slice(-50);
+      }
+    }
     
     res.json({ 
       success: true, 
       received: true,
       timestamp: new Date().toISOString(),
-      notificationId: Date.now()
+      notificationId: Date.now(),
+      message: 'Notification processed successfully'
     });
     
   } catch (error) {
-    console.error('Error processing notification:', error);
+    console.error('❌ Error processing notification:', error);
     res.status(500).json({ 
       success: false, 
-      error: 'Internal server error' 
+      error: 'Internal server error',
+      message: error.message 
     });
   }
+});
+
+// 🟡 Health check
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    profilesCount: Object.keys(profiles).length
+  });
+});
+
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`📋 Available endpoints:`);
+  console.log(`   POST /api/auth/telegram`);
+  console.log(`   GET  /api/profile/:id`);
+  console.log(`   POST /api/pinata/upload`);
+  console.log(`   POST /api/progress`);
+  console.log(`   POST /api/notifications`);
+  console.log(`   GET  /api/health`);
 });
