@@ -74,17 +74,22 @@ app.post("/api/progress", (req, res) => {
   res.json({ success: true, profile: profiles[id] });
 });
 
-// 🟡 Новый endpoint для уведомлений
+// 🟡 Новый endpoint для уведомлений (ИСПРАВЛЕННАЯ ВЕРСИЯ)
 app.post('/api/notifications', async (req, res) => {
   try {
     const { telegramId, message, activityType, userData, metadata } = req.body;
     
+    // Исправление: проверяем наличие userData и его свойств
+    const username = userData?.username || 'unknown';
+    const firstName = userData?.firstName || 'unknown';
+    const messagePreview = message ? message.substring(0, 100) + (message.length > 100 ? '...' : '') : 'empty message';
+    
     console.log('📨 Received notification from Telegram user:', {
       telegramId,
-      username: userData?.username,
-      firstName: userData?.firstName,
+      username,
+      firstName,
       activityType,
-      message: message.substring(0, 100) + (message.length > 100 ? '...' : ''),
+      message: messagePreview,
       timestamp: new Date().toISOString()
     });
     
