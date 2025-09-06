@@ -1,8 +1,7 @@
-import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
-import fetch from "node-fetch";
-import axios from "axios";
+const express = require("express");
+const cors = require("cors");
+const dotenv = require("dotenv");
+const axios = require("axios");
 
 dotenv.config();
 
@@ -47,7 +46,7 @@ app.post("/api/pinata/upload", async (req, res) => {
 
     const response = await axios.post(
       "https://api.pinata.cloud/pinning/pinFileToIPFS",
-      fileBase64, // ⚠️ на практике нужен FormData, это упрощённо
+      fileBase64,
       {
         headers: {
           Authorization: `Bearer ${process.env.PINATA_JWT}`,
@@ -75,7 +74,7 @@ app.post("/api/progress", (req, res) => {
   res.json({ success: true, profile: profiles[id] });
 });
 
-// 🟡 Новый endpoint для уведомлений (ДОБАВЛЕНО ПРАВИЛЬНО)
+// 🟡 Новый endpoint для уведомлений
 app.post('/api/notifications', async (req, res) => {
   try {
     const { telegramId, message, activityType, userData, metadata } = req.body;
@@ -89,7 +88,7 @@ app.post('/api/notifications', async (req, res) => {
       timestamp: new Date().toISOString()
     });
     
-    // Можно сохранить уведомление в профиль пользователя
+    // Сохраняем уведомление в профиль пользователя
     if (telegramId && profiles[telegramId]) {
       if (!profiles[telegramId].notifications) {
         profiles[telegramId].notifications = [];
