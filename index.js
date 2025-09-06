@@ -78,3 +78,33 @@ app.post("/api/progress", (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
 });
+// Добавьте этот маршрут после существующих маршрутов
+app.post('/api/notifications', async (req, res) => {
+  try {
+    const { telegramId, message, activityType, userData, metadata } = req.body;
+    
+    console.log('Received notification from Telegram user:', {
+      telegramId,
+      username: userData?.username,
+      activityType,
+      message
+    });
+    
+    // Здесь можно добавить логику для отправки в реального Telegram бота
+    // или сохранения в базу данных
+    
+    res.json({ 
+      success: true, 
+      received: true,
+      timestamp: new Date().toISOString(),
+      notificationId: Date.now()
+    });
+    
+  } catch (error) {
+    console.error('Error processing notification:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Internal server error' 
+    });
+  }
+});
