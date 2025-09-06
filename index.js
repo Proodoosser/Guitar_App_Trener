@@ -8,8 +8,34 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 10000;
 
+// 🟢 Настройка CSP для разрешения data URI
+app.use((req, res, next) => {
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+  );
+  next();
+});
+
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' })); // Увеличиваем лимит для больших base64 файлов
+
+// 🟢 Корневой маршрут
+app.get("/", (req, res) => {
+  res.json({ 
+    message: "Server is running!",
+    endpoints: {
+      auth: "POST /api/auth/telegram",
+      profile: "GET /api/profile/:id",
+      upload: "POST /api/pinata/upload",
+      getData: "GET /api/pinata/data/:hash",
+      progress: "POST /api/progress",
+      notifications: "POST /api/notifications",
+      health: "GET /api/health"
+    },
+    timestamp: new Date().toISOString()
+  });
+});
 
 // 🟢 Временное "хранилище"
 let profiles = {}; // { telegramId: { name, avatar, ... } }
@@ -38,18 +64,28 @@ app.get("/api/profile/:id", (req, res) => {
   res.json(profile);
 });
 
-// 🟡 Pinata upload (через API key)
+// 🟡 Pinata upload (через API key) - исправленная версия
 app.post("/api/pinata/upload", async (req, res) => {
   try {
-    const { fileBase64, fileName } = req.body;
+    const { fileBase64, fileName, fileType } = req.body;
     if (!fileBase64) return res.status(400).json({ error: "No file" });
+
+    // Конвертируем base64 в buffer
+    const base64Data = fileBase64.replace(/^data:.+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    // Создаем form-data для Pinata
+    const formData = new FormData();
+    const blob = new Blob([buffer], { type: fileType || 'application/octet-stream' });
+    formData.append('file', blob, fileName || 'file');
 
     const response = await axios.post(
       "https://api.pinata.cloud/pinning/pinFileToIPFS",
-      fileBase64,
+      formData,
       {
         headers: {
-          Authorization: `Bearer ${process.env.PINATA_JWT}`,
+          'Authorization': `Bearer ${process.env.PINATA_JWT}`,
+          'Content-Type': 'multipart/form-data',
         },
       }
     );
@@ -65,11 +101,15 @@ app.post("/api/pinata/upload", async (req, res) => {
 app.get("/api/pinata/data/:hash", async (req, res) => {
   try {
     const { hash } = req.params;
-    // Важно: Используйте ваш gateway. Я предполагаю, что это стандартный.
     const response = await axios.get(
-      `https://gateway.pinata.cloud/ipfs/${hash}`
+      `https://gateway.pinata.cloud/ipfs/${hash}`,
+      {
+        headers: {
+          'Accept': 'application/json',
+        },
+        timeout: 10000
+      }
     );
-    // Pinata gateway может не требовать JWT для чтения публичных данных
     res.json(response.data);
   } catch (err) {
     console.error("Pinata fetch error:", err.response?.data || err.message);
@@ -90,12 +130,11 @@ app.post("/api/progress", (req, res) => {
   res.json({ success: true, profile: profiles[id] });
 });
 
-// 🟡 Новый endpoint для уведомлений (ИСПРАВЛЕННАЯ ВЕРСИЯ)
+// 🟡 Новый endpoint для уведомлений
 app.post('/api/notifications', async (req, res) => {
   try {
     const { telegramId, message, activityType, userData, metadata } = req.body;
     
-    // Исправление: проверяем наличие userData и его свойств
     const username = userData?.username || 'unknown';
     const firstName = userData?.firstName || 'unknown';
     const messagePreview = message ? message.substring(0, 100) + (message.length > 100 ? '...' : '') : 'empty message';
@@ -109,7 +148,6 @@ app.post('/api/notifications', async (req, res) => {
       timestamp: new Date().toISOString()
     });
     
-    // Сохраняем уведомление в профиль пользователя
     if (telegramId && profiles[telegramId]) {
       if (!profiles[telegramId].notifications) {
         profiles[telegramId].notifications = [];
@@ -121,7 +159,6 @@ app.post('/api/notifications', async (req, res) => {
         metadata
       });
       
-      // Ограничиваем историю уведомлений (последние 50)
       if (profiles[telegramId].notifications.length > 50) {
         profiles[telegramId].notifications = profiles[telegramId].notifications.slice(-50);
       }
@@ -157,6 +194,7 @@ app.get('/api/health', (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
   console.log(`📋 Available endpoints:`);
+  console.log(`   GET  /`);
   console.log(`   POST /api/auth/telegram`);
   console.log(`   GET  /api/profile/:id`);
   console.log(`   POST /api/pinata/upload`);
